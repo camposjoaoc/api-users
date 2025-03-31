@@ -27,8 +27,22 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJSDoc(swaggerOptions);
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-app.get("/", (req, res) => {
-    res.send("Welcome to our Users API!");
+app.get('/', (req, res, next) => {
+    const userAuthenticated = false;
+
+    if (userAuthenticated) {
+        res.status(401).send('Unauthorized');
+    }
+    else {
+        res.send('Welcomne to the Users API');
+    }
+    next();
+});
+
+// This middleware logs all requests
+app.use((req, res, next) => {
+    console.log(`${req.method} request made to: ${req.url} at ${new Date().toLocaleTimeString()}`);
+    next();
 });
 
 app.listen(PORT, () => {
@@ -120,6 +134,17 @@ app.post("/users", (req, res) => {
     res.json({ message: `User added successfully!`, users: newUser });
 });
 
+const checkIfUserExists = (req, res, next) => {
+    const userId = parseInt(req.params.id);
+    const user = users.find((u) => u.id === userId);
+
+    if (!user) {
+        return res.status(404).json({ message: "User not found!" });
+    }
+    req.user = user;
+    next();
+};
+
 /**
  * @swagger
  * /users/{id}:
@@ -166,14 +191,12 @@ app.post("/users", (req, res) => {
  *         description: User not found!
  */
 
-app.put("/users/:id", (req, res) => {
-    const userId = parseInt(req.params.id);
-    const user = users.find((b) => b.id === userId);
-    if (!user) {
-        return res.status(404).json({ message: "User not found!" });
-    }
+app.put("/users/:id", checkIfUserExists, (req, res) => {
+    const user = req.user;
+
     user.name = req.body.name || user.name;
     user.password = req.body.password || user.password;
+
     res.json({ message: "User updated successfully!", user });
 });
 
@@ -202,8 +225,15 @@ app.put("/users/:id", (req, res) => {
  *       404:
  *         description: User not found!
  */
-app.delete("/users/:id", (req, res) => {
+
+app.delete("/users/:id", checkIfUserExists, (req, res) => {
     const userId = parseInt(req.params.id);
-    users = users.filter((b) => b.id !== userId);
+    users = users.filter((u) => u.id !== userId);
+
     res.status(200).json({ message: "User deleted successfully!" });
+});
+
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something went wrong!');
 });
